@@ -15,7 +15,8 @@
        · script-src 'sha256-…'→ 이 파일 안의 <script> 만 허용, 바깥 스크립트는 차단
        · img-src data: blob:       → CI 로고(data:)만 허용. 바깥 주소로 그림을 불러오지 못한다
                                      (색상 자리에 url(https://…) 이 끼어들어도 요청이 안 나간다)
-       · connect-src 'none'        → fetch·XHR·beacon 전면 차단 (자료가 밖으로 나갈 통로 없음)
+       · connect-src api.github.com → ★ v225: GitHub 자동 저장용으로 이 한 곳만 열었다 (그 밖의 fetch·XHR·beacon 은 전부 차단).
+                                     사용자가 [☁ GitHub] 에서 직접 연결했을 때만 쓰인다
        · object-src·base-uri·form-action → 전부 차단
        (frame-ancestors 는 <meta> 로는 적용되지 않아 넣지 않았다 — 넣으면 콘솔 경고만 남는다)
 
@@ -24,7 +25,7 @@
      해시는 파일을 고칠 때마다 다시 계산해야 하고 틀리면 프로그램이 열리지 않는다.
      빌드 도구가 없는 현재 구조에서는 위험이 커서, 지시가 있을 때 단계적으로 진행한다.
      ══════════════════════════════════════════════════════════════════════ -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-k1f0e0cEzygqgcXuqLcFnDVYSbvLhSoO8oxZKIjHph8=' 'sha256-2ewnD3UH/dWpp4lTlxclAUDI8WezUHEB9L19hzblW9k=' 'sha256-EHV07ehXz/7W1iCBYSApfFgRGvj+1fQ1DbZB67gNEao='; style-src-elem 'sha256-Oq6gTl3YdYhsPnvNjUpIuNeRVJ5D9qV3CD6lsQFhkXs=' 'sha256-NjbZWchh4qhVl4WV60F1Ew7OIxts3wRKDDvGtCYma1k='; style-src-attr 'none'; img-src data: blob:; connect-src 'none'; font-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-k1f0e0cEzygqgcXuqLcFnDVYSbvLhSoO8oxZKIjHph8=' 'sha256-VguDioLLIvMhLueDkvZhPQwIJe3J1m0Dhl0hGZ1y4ww=' 'sha256-EHV07ehXz/7W1iCBYSApfFgRGvj+1fQ1DbZB67gNEao='; style-src-elem 'sha256-Oq6gTl3YdYhsPnvNjUpIuNeRVJ5D9qV3CD6lsQFhkXs=' 'sha256-NjbZWchh4qhVl4WV60F1Ew7OIxts3wRKDDvGtCYma1k='; style-src-attr 'none'; img-src data: blob:; connect-src https://api.github.com; font-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>관리기준 공정표 v5.0 (b119)</title><!-- ★ v119: 표시 문구는 applyVersionLabels() 가 APP_LINE/APP_BUILD 에서 다시 채운다 (이 값은 스크립트 실패 시 대비용) -->
@@ -2447,6 +2448,7 @@ td.mo-d[data-kbd-cur],td.gb-cell[data-kbd-cur]{box-shadow:inset 0 0 0 1px rgba(2
       <div class="start-secondary">
         <button type="button" data-click-act="loadState">임시저장 열기</button>
         <button type="button" data-click-act="uiClickEl" data-click-args='["json-file-input"]'>JSON 파일 열기</button>
+        <button type="button" data-click-act="openGithubSync">GitHub 에서 열기</button>
         <button type="button" data-click-act="openSampleWindow">예시 보기</button>
         <button type="button" id="startBackButton" class="start-back" data-click-act="closeProjectStartScreen">공정표로 돌아가기</button>
       </div>
@@ -2528,6 +2530,7 @@ td.mo-d[data-kbd-cur],td.gb-cell[data-kbd-cur]{box-shadow:inset 0 0 0 1px rgba(2
       <label class="save-btn" data-style="cursor:pointer;background:#1B3A6B;color:#fff" title="파일열기(JSON) — 공정표 파일(.json)에서 불러오기">
         📁 열기<input type="file" id="json-file-input" accept=".json" data-style="display:none" data-change-act="loadFromFile" data-change-args="[&quot;$ev&quot;]">
       </label>
+      <button class="save-btn" id="ghBtn" data-click-act="openGithubSync" title="GitHub 자동 저장 — 편집 내용을 내 GitHub 저장소에 자동으로 올립니다 (설정)">☁ GitHub</button>
     </div>
     <span class="tb-sep"></span>
     <div class="tb-group"><span class="tb-glabel">출력</span>
@@ -5254,10 +5257,11 @@ function delSub(catId,subId){const sc=calc();const catBars=sc.bars.filter(b=>b.c
      APP_BUILD : 작업 파일 끝번호와 항상 같게 유지한다 (..._v119_작업용.html -> "119")
    STATE_SCHEMA_VERSION 은 저장 포맷이 바뀔 때만 올린다 — 표시 버전과 별개다. */
 /* ▣▣▣ [S5] 버전·저장·복원 — APP_VERSION / getState·applyState / 자동저장 / 실행취소 ▣▣▣ */
-const APP_LINE="5.0", APP_BUILD="224";
+const APP_LINE="5.0", APP_BUILD="225";
 const APP_VERSION=`v${APP_LINE} (b${APP_BUILD})`, STATE_SCHEMA_VERSION=16;/* ★ v202: rcSegSteps 추가 · ★ v210: cycleOff(작업 불가일) 추가 · ★ v219: floorPlanW·floorPlanChk(비기준층 계획 배분) 추가 */
 /* 변경 이력 — 새 버전을 만들 때 맨 위에 한 줄 추가한다 (배지 툴팁·콘솔에서 확인) */
 const CHANGELOG=[
+  {b:"225",t:"[사용자 지시 2026-10-07] **GitHub 자동 저장** — 편집 내용이 사용자의 GitHub 저장소 파일(JSON)로 자동으로 올라간다. 상단 [☁ GitHub] 에서 소유자·저장소·파일 경로·토큰을 넣고 [연결]하면, 임시저장이 될 때마다 예약되어 마지막 편집 약 20초 뒤 1회 커밋된다(창을 숨기거나 닫을 때는 즉시). 토큰은 이 기기 브라우저에만 두고 저장 파일·실행취소 기록에는 싣지 않는다. CSP connect-src 는 api.github.com 한 곳만 열었다. 다른 기기가 먼저 올린 내용은 덮어쓰지 않고 멈춰서 [불러오기]/[덮어쓰기]를 고르게 한다. 시작 화면에도 [GitHub 에서 열기] 를 두었다"},
   {b:"224",t:"[사용자 지적 2026-09-08] **동 칩의 세대수 칸을 비우면 조용히 0 세대가 되던 것**을 고쳤다. 신고: '101동만 숫자가 없고 102·103동은 있는 이유는?' — 칸을 비우면 `parseInt(\"\")||0` 으로 0 이 되어 요약 띠의 세대수(합)만 300 → 200 으로 줄고, 칸은 빈 채로 남아 화면과 값이 어긋났다(다음에 동 칩이 다시 그려질 때에야 '0' 이 나타난다). Lite 는 여기에 더해 기본 호실 구성이 세대수 ÷ 지상층수로 정해지므로 2호까지 줄었다. 이제 **빈칸·숫자가 아닌 값은 '입력 취소'** 로 보고 원래 값을 지키며, 칸은 저장된 값으로 다시 쓴다 — 0 을 원하면 0 을 치면 된다. PRO Version 0.4 도 같이 고쳤다(거기서는 값이 그대로면 실행취소 단계도 더 이상 쌓이지 않는다)"},
   {b:"223",t:"[사용자 지적 2026-09-08] **첫 화면 [동 이름] 칸의 안내글을 「101동」 → 「-」 로** 바꿨다. v222 에서 값은 이미 비워 두었지만 안내글이 「101동」이라 값처럼 읽혔다(옆의 지하층·지상층·세대수는 전부 「-」). 네 칸의 규칙을 하나로 맞춘다 — PRO Version 0.3 도 같이 적용"},
   {b:"222",t:"[사용자 지적·지시 2026-09-08] ① **도구 단추줄을 되살렸다** — v221 이 상단 입력줄을 감추면서 `.setup` 을 통째로 감춰 [▶ 공정표 생성]·[↩ ↪]·[📋 예시 보기]·[＋ 철골공사]·[📐 관리기준]·[⚙ 층별 W/D] 까지 함께 사라졌다. 감추는 것은 입력칸 묶음(.setup-inputs) 하나뿐이다 (PRO Version 0.2 도 같이 고쳤다) ② **첫 화면 동 구성 첫 줄을 빈칸으로 시작한다** — 101동·지하 2·지상 25 가 미리 적혀 있어 그대로 두고 [생성] 을 누르면 남의 현장 값으로 공정표가 만들어졌다. 빈칸이 되었으니 지하층수도 [생성] 때 검사하고, 층수를 넣기 전에는 [층구성]·[호실구성] 을 열지 않는다(열면 빈칸이 지하 0층·지상 1층으로 굳었다) ③ **요약 띠 이름을 「준공일」·「전체 공기」로** 바꿨다(예전 골조 완공·골조 공기). 후속 공종이 아직 없는 상태는 이름 대신 주황색과 안내로만 알린다 — PRO Version 0.2 도 같이 적용"},
@@ -5465,6 +5469,7 @@ function autosaveNow(){
   if(r.ok){
     if(_autosaveFailedAt)clearAutosaveAlert();
     setStatus("자동저장됨 "+new Date().toLocaleTimeString("ko",{hour:"2-digit",minute:"2-digit"}));
+    ghScheduleSave();/* ★ v225: 임시저장이 될 때마다 GitHub 저장도 예약한다 */
   }else{
     _autosaveFailedAt=Date.now();
     setStatus("⚠ 자동저장 실패 — [💾 저장]으로 파일에 보관하세요");
@@ -5959,12 +5964,328 @@ function loadFromFile(event){
 function saveState(){
   historyFlushSoon();
   const r=persistStateToStorage();
-  if(r.ok){clearAutosaveAlert();setStatus("저장됨 "+new Date().toLocaleTimeString("ko",{hour:"2-digit",minute:"2-digit"}));return;}
+  if(r.ok){clearAutosaveAlert();setStatus("저장됨 "+new Date().toLocaleTimeString("ko",{hour:"2-digit",minute:"2-digit"}));ghScheduleSave();/* ★ v225 */return;}
   _autosaveFailedAt=Date.now();
   setStatus("⚠ 임시저장 실패 — 브라우저 저장 공간 부족. [💾 저장]으로 파일에 보관하세요");
   showAutosaveAlert(r.error);
 }
 function loadState(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw){alert("저장된 공정표가 없습니다.");return;}applyState(JSON.parse(raw));historyResetAfterLoad();/* ★ v218 */setStatus("불러옴 "+new Date().toLocaleTimeString("ko",{hour:"2-digit",minute:"2-digit"})+stateLoadReport()/* ★ v218: 잘려 나간 항목도 알린다 */);}catch(e){alert("불러오지 못했습니다: "+e.message);}}
+/* ══════════════════════════════════════════════════════════════════════
+   ★ v225: GitHub 자동 저장 — 편집 내용이 사용자의 GitHub 저장소 파일로 올라간다.
+   [사용자 지시 2026-10-07] "공정표를 작성하면서 변경된 내용이 자동으로 내 깃허브에 저장"
+
+   · 저장 위치·토큰은 [☁ GitHub] 창에서 사용자가 넣는다. 이 파일(공개 저장소)에는
+     토큰이 들어가지 않는다 — 기기 브라우저 저장공간(GH_CFG_KEY)에만 둔다.
+     getState()(=저장 파일·임시저장·실행취소)에도 싣지 않는다.
+   · 토큰이 나가는 곳은 GH_API(https://api.github.com) 한 곳뿐이다.
+     CSP connect-src 도 그 한 곳만 열었다. 소유자·저장소·브랜치·경로는
+     ghNormCfg() 가 글자 종류를 검사해 주소에 다른 호스트·상위 폴더가 섞이지 못한다.
+   · 임시저장(3초)이 성공할 때마다 예약하고, 마지막 편집 GH_SAVE_DELAY 뒤에 1회 올린다
+     (올릴 때마다 커밋 1건 — 편집마다 올리면 이력이 수천 건이 된다).
+   · 다른 기기가 먼저 올린 내용을 덮어쓰지 않는다: 이 기기가 마지막으로 맞춘 지문(sha)과
+     GitHub 의 지문이 다르면 멈추고 [불러오기]/[덮어쓰기]를 사용자가 고르게 한다.
+   ══════════════════════════════════════════════════════════════════════ */
+const GH_API="https://api.github.com";
+const GH_CFG_KEY="hdec_schedule_github_v1";
+const GH_SAVE_DELAY=20000;
+let _ghCfg=null,_ghCfgRead=false,_ghTimer=null,_ghBusy=false,_ghDirty=false,_ghConflict=false,_ghLastJson="",_ghLastOkAt=null,_ghLastErr="";
+/* 경로 정리 — 상위 폴더 이동·역슬래시·제어문자를 거부하고 .json 으로 끝나게 한다 */
+function ghCleanPath(p){
+  p=String(p==null?"":p).trim();
+  if(!p||p.length>200||/[\\\u0000-\u001f\u007f]/.test(p))return "";
+  const segs=p.split("/").map(s=>s.trim()).filter(Boolean);
+  if(!segs.length||segs.some(s=>s==="."||s===".."))return "";
+  let out=segs.join("/");
+  if(!/\.json$/i.test(out))out+=".json";
+  return out;
+}
+function ghNormCfg(c){
+  if(!c||typeof c!=="object")return null;
+  const owner=String(c.owner||"").trim(),repo=String(c.repo||"").trim(),
+        branch=String(c.branch||"main").trim()||"main",path=ghCleanPath(c.path),token=String(c.token||"").trim();
+  if(!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(owner))return null;
+  if(!/^[A-Za-z0-9._-]{1,100}$/.test(repo)||repo==="."||repo==="..")return null;
+  if(!/^[A-Za-z0-9._\/-]{1,100}$/.test(branch)||branch.includes(".."))return null;
+  if(!path)return null;
+  if(!/^[A-Za-z0-9_]{20,255}$/.test(token))return null;
+  return{owner,repo,branch,path,token,auto:c.auto!==false,sha:typeof c.sha==="string"&&/^[0-9a-f]{40,64}$/.test(c.sha)?c.sha:""};
+}
+function ghLoadCfg(){
+  if(_ghCfgRead)return _ghCfg;
+  _ghCfgRead=true;
+  try{_ghCfg=ghNormCfg(JSON.parse(localStorage.getItem(GH_CFG_KEY)||"null"));}catch(e){_ghCfg=null;}
+  return _ghCfg;
+}
+function ghStoreCfg(cfg){
+  _ghCfg=cfg;_ghCfgRead=true;
+  try{if(cfg)localStorage.setItem(GH_CFG_KEY,JSON.stringify(cfg));else localStorage.removeItem(GH_CFG_KEY);return true;}
+  catch(e){return false;}
+}
+function ghUrl(cfg,withRef){
+  return `${GH_API}/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path.split("/").map(encodeURIComponent).join("/")}`
+        +(withRef?`?ref=${encodeURIComponent(cfg.branch)}`:"");
+}
+/* 한글이 섞인 문자열 → base64 (btoa 는 Latin-1 만 받는다) */
+function ghB64(str){
+  const bytes=new TextEncoder().encode(str);let bin="";
+  for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));
+  return btoa(bin);
+}
+function ghErrText(status){
+  if(status===401)return "토큰이 틀렸거나 만료되었습니다";
+  if(status===403)return "권한이 없습니다 — 토큰의 Contents 권한(읽기·쓰기) 또는 요청 한도를 확인하세요";
+  if(status===404)return "저장소·브랜치를 찾지 못했습니다 — 이름과 토큰의 저장소 접근 권한을 확인하세요";
+  if(status===409||status===422)return "GitHub 의 파일이 다른 곳에서 바뀌었습니다";
+  return "GitHub 응답 오류("+status+")";
+}
+function ghFetch(url,cfg,opt){
+  opt=opt||{};
+  const headers={"Accept":opt.raw?"application/vnd.github.raw+json":"application/vnd.github+json",
+                 "Authorization":"Bearer "+cfg.token,"X-GitHub-Api-Version":"2022-11-28"};
+  let body;
+  if(opt.body){headers["Content-Type"]="application/json";body=JSON.stringify(opt.body);}
+  return fetch(url,{method:opt.method||"GET",headers,body,cache:"no-store",credentials:"omit",
+                    referrerPolicy:"no-referrer",keepalive:!!(opt.keepalive&&(!body||body.length<60000))});
+}
+/* GitHub 에 있는 파일의 지문. 파일이 없으면 "" */
+async function ghRemoteSha(cfg){
+  const res=await ghFetch(ghUrl(cfg,true),cfg);
+  if(res.status===404)return "";
+  if(!res.ok)throw new Error(ghErrText(res.status));
+  const j=await res.json();
+  if(Array.isArray(j))throw new Error("파일 경로가 폴더입니다 — 파일 이름까지 적어 주세요");
+  return String(j.sha||"");
+}
+/* 변경 여부 비교용 — savedAt 은 저장할 때마다 달라지므로 뺀다 */
+function ghComparable(st){const c=Object.assign({},st);delete c.savedAt;return JSON.stringify(c);}
+function ghHasSchedule(){return typeof lastSc!=="undefined"&&!!lastSc;}
+function ghTime(d){return (d||new Date()).toLocaleTimeString("ko",{hour:"2-digit",minute:"2-digit"});}
+function ghBadge(){
+  const b=document.getElementById("ghBtn");
+  const cfg=ghLoadCfg();
+  let txt="☁ GitHub",tip="GitHub 자동 저장 — 편집 내용을 내 GitHub 저장소에 자동으로 올립니다 (설정)";
+  if(cfg){
+    if(_ghConflict){txt+=" ⚠";tip="GitHub 의 파일이 다른 기기에서 바뀌었습니다 — 눌러서 [불러오기] 또는 [덮어쓰기]를 고르세요";}
+    else if(_ghLastErr){txt+=" ⚠";tip="GitHub 저장 실패 — "+_ghLastErr;}
+    else if(_ghBusy){txt+=" …";tip="GitHub 에 저장하는 중";}
+    else if(_ghLastOkAt){txt+=" ✓"+ghTime(_ghLastOkAt);tip=`GitHub 에 저장됨 ${ghTime(_ghLastOkAt)} — ${cfg.owner}/${cfg.repo}/${cfg.path}`;}
+    else{txt+=cfg.auto?" 연결":" 수동";tip=`GitHub 연결됨 — ${cfg.owner}/${cfg.repo}/${cfg.path}`;}
+  }
+  if(b){b.textContent=txt;b.title=tip;}
+  ghModalState();
+}
+/* 임시저장이 성공할 때마다 불린다 — 마지막 편집 GH_SAVE_DELAY 뒤에 1회 올린다 */
+function ghScheduleSave(){
+  const cfg=ghLoadCfg();
+  if(!cfg||!cfg.auto||_ghConflict||!ghHasSchedule())return;
+  if(_ghBusy){_ghDirty=true;return;}
+  if(_ghTimer)clearTimeout(_ghTimer);
+  _ghTimer=setTimeout(()=>{_ghTimer=null;ghSaveNow();},GH_SAVE_DELAY);
+}
+/* 창이 숨겨지거나 닫힐 때 — 기다리던 예약이 있으면 바로 올린다 */
+function ghFlush(){
+  if(!_ghTimer)return;
+  clearTimeout(_ghTimer);_ghTimer=null;
+  ghSaveNow({keepalive:true});
+}
+async function ghSaveNow(opt){
+  opt=opt||{};
+  const cfg=ghLoadCfg();
+  if(!cfg)return{ok:false,why:"GitHub 연결이 설정되지 않았습니다"};
+  if(!ghHasSchedule())return{ok:false,why:"공정표를 만든 뒤에 저장됩니다"};
+  if(_ghBusy){_ghDirty=true;return{ok:false,why:"저장하는 중입니다"};}
+  if(_ghConflict&&!opt.force)return{ok:false,why:"GitHub 의 파일이 다른 기기에서 바뀌었습니다"};
+  if(_ghTimer){clearTimeout(_ghTimer);_ghTimer=null;}
+  _ghBusy=true;_ghDirty=false;ghBadge();
+  let out;
+  try{
+    const st=getState(),cmp=ghComparable(st);
+    if(!opt.force&&cmp===_ghLastJson){out={ok:true,same:true};}
+    else{
+      /* 이 기기가 마지막으로 맞춘 지문과 GitHub 의 지금 지문을 견준다 */
+      let sha=cfg.sha;
+      if(opt.force||!_ghLastJson){
+        const remote=await ghRemoteSha(cfg);
+        if(!opt.force&&remote&&remote!==cfg.sha){_ghConflict=true;throw new Error(ghErrText(409));}
+        sha=remote;
+      }
+      const sn=String(st.inputs&&st.inputs.sn||"공정표").slice(0,60);
+      const body={message:`공정표 자동 저장: ${sn} (${APP_VERSION})`,content:ghB64(JSON.stringify(st,null,1)),branch:cfg.branch};
+      if(sha)body.sha=sha;
+      const res=await ghFetch(ghUrl(cfg),cfg,{method:"PUT",body,keepalive:opt.keepalive});
+      if(res.status===409||res.status===422){_ghConflict=true;throw new Error(ghErrText(res.status));}
+      if(!res.ok)throw new Error(ghErrText(res.status));
+      const j=await res.json();
+      cfg.sha=String(j&&j.content&&j.content.sha||"");ghStoreCfg(cfg);
+      _ghLastJson=cmp;_ghConflict=false;out={ok:true};
+    }
+    _ghLastErr="";_ghLastOkAt=new Date();
+    if(!out.same)setStatus("GitHub 에 저장됨 "+ghTime(_ghLastOkAt));
+  }catch(e){
+    _ghLastErr=String(e&&e.message||e);
+    if(/Failed to fetch|Load failed|NetworkError/i.test(_ghLastErr))_ghLastErr="인터넷에 연결할 수 없습니다";
+    setStatus("⚠ GitHub 저장 실패 — "+_ghLastErr+(_ghConflict?" · [☁ GitHub]에서 불러오기/덮어쓰기를 고르세요":""));
+    out={ok:false,why:_ghLastErr};
+  }finally{
+    _ghBusy=false;ghBadge();
+    if(_ghDirty&&!_ghConflict){_ghDirty=false;ghScheduleSave();}
+  }
+  return out;
+}
+/* GitHub 의 저장본을 불러온다 (지금 화면의 내용은 바뀐다) */
+async function ghLoadRemote(){
+  const cfg=ghLoadCfg();
+  if(!cfg)throw new Error("GitHub 연결이 설정되지 않았습니다");
+  const res=await ghFetch(ghUrl(cfg,true),cfg,{raw:true});
+  if(res.status===404)throw new Error("GitHub 에 저장된 공정표가 아직 없습니다");
+  if(!res.ok)throw new Error(ghErrText(res.status));
+  const text=await res.text();
+  if(text.length>30*1024*1024)throw new Error("파일이 너무 큽니다(30MB 초과)");
+  let st;try{st=JSON.parse(text);}catch(e){throw new Error("올바른 공정표 파일이 아닙니다");}
+  if(!st||!st.inputs)throw new Error("올바른 공정표 파일이 아닙니다");
+  if(!stateVersionOk(st,cfg.path))return false;
+  const sha=await ghRemoteSha(cfg);
+  if(_ghTimer){clearTimeout(_ghTimer);_ghTimer=null;}
+  applyState(st);historyResetAfterLoad();
+  cfg.sha=sha;ghStoreCfg(cfg);
+  _ghLastJson=ghComparable(getState());_ghConflict=false;_ghLastErr="";_ghLastOkAt=new Date();
+  persistStateToStorage();
+  setStatus("GitHub 에서 불러옴: "+cfg.path+stateLoadReport());
+  ghBadge();
+  return true;
+}
+/* 시작할 때 1회 — 다른 기기가 올린 더 새로운 저장본이 있으면 알린다 (덮어쓰기 방지) */
+async function ghCheckOnBoot(){
+  const cfg=ghLoadCfg();ghBadge();
+  if(!cfg)return;
+  try{
+    const remote=await ghRemoteSha(cfg);
+    if(remote&&remote!==cfg.sha){
+      _ghConflict=true;ghBadge();
+      setStatus("GitHub 에 다른 기기에서 저장한 공정표가 있습니다 — [☁ GitHub]에서 불러오세요");
+    }
+  }catch(e){}
+}
+/* ── 설정 창 ── */
+function closeGithubSync(){document.getElementById("ghModal")?.remove();}
+function ghModalMsg(msg,bad){
+  const el=document.getElementById("ghMsg");if(!el)return;
+  el.textContent=msg||"";el.style.color=bad?"#B91C1C":"#166534";
+}
+function ghModalState(){
+  const el=document.getElementById("ghState");if(!el)return;
+  const cfg=ghLoadCfg();
+  if(!cfg){el.textContent="연결되지 않음 — 아래 내용을 넣고 [연결]을 누르세요.";return;}
+  el.textContent=_ghConflict?"⚠ GitHub 의 파일이 다른 기기에서 바뀌었습니다. [GitHub 에서 불러오기] 또는 [지금 저장(덮어쓰기)] 중 하나를 고르세요."
+    :_ghLastErr?"⚠ 마지막 저장 실패 — "+_ghLastErr
+    :_ghBusy?"저장하는 중…"
+    :_ghLastOkAt?`연결됨 · 마지막 저장 ${ghTime(_ghLastOkAt)}`
+    :"연결됨"+(cfg.auto?" · 편집하면 약 20초 뒤 자동으로 저장됩니다":" · 자동 저장 꺼짐");
+}
+function openGithubSync(){
+  closeGithubSync();
+  const cfg=ghLoadCfg();
+  const box=document.createElement("div");box.id="ghModal";box.className="ms-modal-back";
+  box.setAttribute("data-click-act","uiBackdrop");box.setAttribute("data-click-args",'["$ev","$el","closeGithubSync"]');
+  const row=(label,id,type,ph)=>`<label data-style="display:flex;align-items:center;gap:8px;margin-top:8px"><span data-style="flex:0 0 84px;font-weight:700;color:#334155">${label}</span><input id="${id}" type="${type}" placeholder="${ph}" autocomplete="off" autocapitalize="off" spellcheck="false" data-style="flex:1;min-width:0;height:34px;padding:0 9px;border:1px solid #CBD5E1;border-radius:5px;font-size:16px;font-family:inherit"></label>`;
+  box.innerHTML=`<div class="ms-modal" aria-label="GitHub 자동 저장" data-style="width:min(560px,calc(100vw - 32px))">
+    <div class="ms-modal-head"><span>☁ GitHub 자동 저장</span><button type="button" data-click-act="closeGithubSync" aria-label="닫기" data-style="border:none;background:none;color:#fff;font-size:18px;cursor:pointer">×</button></div>
+    <div class="ms-modal-body" data-style="font-size:12px;color:#475569;line-height:1.6">
+      <div id="ghState" data-style="padding:8px 10px;background:#F1F5F9;border-radius:6px;color:#1E293B;font-weight:700"></div>
+      ${row("소유자","ghOwner","text","GitHub 아이디")}
+      ${row("저장소","ghRepo","text","예: ipark-schedule-data (비공개 권장)")}
+      ${row("브랜치","ghBranch","text","main")}
+      ${row("파일 경로","ghPath","text","예: schedules/현장명.json")}
+      ${row("토큰","ghToken","password","github_pat_… (이 기기에만 저장)")}
+      <label data-style="display:flex;align-items:center;gap:6px;margin-top:10px;color:#334155;font-weight:700"><input id="ghAuto" type="checkbox"> 편집하면 자동으로 GitHub 에 저장</label>
+      <div id="ghMsg" role="status" data-style="min-height:18px;margin-top:8px;font-weight:700"></div>
+      <div data-style="margin-top:6px;padding:8px 10px;border:1px solid #E2E8F0;border-radius:6px;font-size:11px;color:#64748B">
+        · 토큰은 GitHub → Settings → Developer settings → Fine-grained tokens 에서 만듭니다. <b>저장할 저장소 하나만</b> 고르고 Contents 권한을 <b>Read and write</b> 로 주세요.<br>
+        · 토큰은 이 기기의 브라우저에만 보관되고, 공정표 파일·GitHub 에는 올라가지 않습니다. 공용 PC 에서는 쓰고 나서 [연결 해제]를 누르세요.<br>
+        · <b>공개 저장소에 저장하면 공정표 내용을 누구나 볼 수 있습니다.</b> 비공개 저장소를 권합니다.
+      </div>
+    </div>
+    <div class="ms-modal-foot" data-style="flex-wrap:wrap">
+      <button type="button" class="ms-foot-btn" data-click-act="ghDisconnect">연결 해제</button>
+      <span data-style="flex:1"></span>
+      <button type="button" class="ms-foot-btn" data-click-act="ghUiLoad">GitHub 에서 불러오기</button>
+      <button type="button" class="ms-foot-btn" data-click-act="ghUiSave">지금 저장</button>
+      <button type="button" class="ms-foot-btn primary" data-click-act="ghUiConnect">연결</button>
+    </div></div>`;
+  document.body.appendChild(box);applyDataStyles(box);
+  const sn=String(document.getElementById("sn")?.value||"").trim().replace(/[\\/:*?"<>|]/g,"_");
+  document.getElementById("ghOwner").value=cfg?cfg.owner:"";
+  document.getElementById("ghRepo").value=cfg?cfg.repo:"";
+  document.getElementById("ghBranch").value=cfg?cfg.branch:"main";
+  document.getElementById("ghPath").value=cfg?cfg.path:`schedules/${sn||"공정표"}.json`;
+  document.getElementById("ghToken").value=cfg?cfg.token:"";
+  document.getElementById("ghAuto").checked=cfg?cfg.auto:true;
+  modalA11y(box);ghModalState();
+}
+function ghReadForm(){
+  const v=id=>document.getElementById(id)?.value||"";
+  const prev=ghLoadCfg();
+  const cfg=ghNormCfg({owner:v("ghOwner"),repo:v("ghRepo"),branch:v("ghBranch"),path:v("ghPath"),token:v("ghToken"),
+                       auto:!!document.getElementById("ghAuto")?.checked});
+  if(!cfg)return null;
+  /* 같은 파일을 가리키면 이 기기가 맞춰 둔 지문을 이어 쓴다 */
+  if(prev&&prev.owner===cfg.owner&&prev.repo===cfg.repo&&prev.branch===cfg.branch&&prev.path===cfg.path)cfg.sha=prev.sha;
+  else{_ghLastJson="";_ghLastOkAt=null;}
+  return cfg;
+}
+async function ghUiConnect(){
+  const cfg=ghReadForm();
+  if(!cfg){ghModalMsg("입력을 확인하세요 — 소유자·저장소·파일 경로·토큰이 모두 필요합니다(주소 전체가 아니라 이름만).",true);return false;}
+  ghModalMsg("GitHub 에 확인하는 중…");
+  try{
+    /* 파일이 없어서 404 인지, 저장소 이름·권한이 틀려서 404 인지 먼저 가린다 */
+    const rr=await ghFetch(`${GH_API}/repos/${cfg.owner}/${cfg.repo}`,cfg);
+    if(!rr.ok)throw new Error(ghErrText(rr.status));
+    const remote=await ghRemoteSha(cfg);
+    if(!ghStoreCfg(cfg)){ghModalMsg("이 브라우저에 설정을 보관하지 못했습니다(저장 공간).",true);return false;}
+    _ghLastErr="";_ghConflict=!!(remote&&remote!==cfg.sha);
+    ghBadge();
+    if(_ghConflict){ghModalMsg("연결됨. GitHub 에 이미 저장본이 있습니다 — [GitHub 에서 불러오기] 또는 [지금 저장(덮어쓰기)]을 고르세요.",true);return true;}
+    if(!ghHasSchedule()){ghModalMsg("연결됨. 공정표를 만들면 자동으로 저장됩니다.");return true;}
+    const r=await ghSaveNow({force:true});
+    ghModalMsg(r.ok?"연결됨 — 지금 내용을 GitHub 에 저장했습니다.":"연결은 되었지만 저장하지 못했습니다 — "+r.why,!r.ok);
+    return true;
+  }catch(e){
+    let m=String(e&&e.message||e);
+    if(/Failed to fetch|Load failed|NetworkError/i.test(m))m="인터넷에 연결할 수 없습니다";
+    ghModalMsg("연결 실패 — "+m,true);return false;
+  }
+}
+async function ghUiSave(){
+  if(!ghLoadCfg()){ghModalMsg("먼저 [연결]을 누르세요.",true);return;}
+  if(_ghConflict&&!confirm("GitHub 의 파일이 다른 기기에서 바뀌었습니다.\n지금 화면의 내용으로 덮어쓸까요?\n\n(GitHub 의 이전 내용은 저장소의 커밋 이력에 남습니다)"))return;
+  historyFlushSoon();
+  ghModalMsg("저장하는 중…");
+  const r=await ghSaveNow({force:true});
+  ghModalMsg(r.ok?"GitHub 에 저장했습니다.":"저장하지 못했습니다 — "+r.why,!r.ok);
+}
+async function ghUiLoad(){
+  if(!ghLoadCfg()){ghModalMsg("먼저 [연결]을 누르세요.",true);return;}
+  if(ghHasSchedule()&&!confirm("GitHub 의 저장본을 불러옵니다.\n지금 화면의 공정표는 불러온 내용으로 바뀝니다.\n\n계속할까요?"))return;
+  ghModalMsg("불러오는 중…");
+  try{
+    const ok=await ghLoadRemote();
+    if(ok)closeGithubSync();else ghModalMsg("불러오기를 취소했습니다.",true);
+  }catch(e){
+    let m=String(e&&e.message||e);
+    if(/Failed to fetch|Load failed|NetworkError/i.test(m))m="인터넷에 연결할 수 없습니다";
+    ghModalMsg("불러오지 못했습니다 — "+m,true);
+  }
+}
+function ghDisconnect(){
+  if(!ghLoadCfg()){closeGithubSync();return;}
+  if(!confirm("이 기기에서 GitHub 연결(토큰 포함)을 지웁니다.\nGitHub 에 올라간 공정표 파일은 그대로 남습니다.\n\n계속할까요?"))return;
+  if(_ghTimer){clearTimeout(_ghTimer);_ghTimer=null;}
+  ghStoreCfg(null);_ghConflict=false;_ghLastErr="";_ghLastJson="";_ghLastOkAt=null;
+  closeGithubSync();ghBadge();setStatus("GitHub 연결을 해제했습니다");
+}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")ghFlush();});
+setTimeout(()=>{ghCheckOnBoot();},0);
 /* ★ 2: 계산 - 동별 floors 사용 */
 /* ▣▣▣ [S6] 계산 파이프라인 — calc() : CATS × blds → 바 목록(시작·종료·W/D) ▣▣▣ */
 function calc(){
@@ -13771,6 +14092,25 @@ function selfTest(){
   const S=v=>JSON.stringify(v);
   const eq=(name,got,want)=>items.push({name,got:S(got),want:S(want),ok:S(got)===S(want)});
   const seg=(t,c)=>({type:t,count:c});
+  /* ★ v225: GitHub 자동 저장 — 토큰이 저장 상태에 실리지 않고, 주소가 api.github.com 밖으로 새지 않는다 */
+  {
+    const tk="github_pat_"+"A1b2".repeat(8);
+    const ok=ghNormCfg({owner:"i2002da",repo:"ipark-schedule-data",path:"schedules/천안 IPC.json",token:tk});
+    eq("GitHub 설정 — 올바른 값은 통과하고 브랜치 기본값은 main",[!!ok,ok&&ok.branch,ok&&ok.auto],[true,"main",true]);
+    eq("GitHub 주소는 api.github.com 고정 + 한글 경로 인코딩",
+       ok&&ghUrl(ok,true),"https://api.github.com/repos/i2002da/ipark-schedule-data/contents/schedules/"+encodeURIComponent("천안 IPC.json")+"?ref=main");
+    eq("GitHub 설정 — 주소·상위 폴더·줄바꿈 토큰은 거부",
+       [ghNormCfg({owner:"evil.example/x",repo:"r",path:"a.json",token:tk}),
+        ghNormCfg({owner:"o",repo:"r",path:"../a.json",token:tk}),
+        ghNormCfg({owner:"o",repo:"..",path:"a.json",token:tk}),
+        ghNormCfg({owner:"o",repo:"r",path:"a.json",token:tk+"\r\nX: y"})],[null,null,null,null]);
+    eq("GitHub 경로 정리 — .json 을 붙이고 빈 마디를 없앤다",[ghCleanPath(" /a//b "),ghCleanPath("a/./b.json"),ghCleanPath("")],["a/b.json","",""]);
+    eq("GitHub base64 — 한글 왕복",new TextDecoder().decode(Uint8Array.from(atob(ghB64("공정표 A1")),c=>c.charCodeAt(0))),"공정표 A1");
+    eq("GitHub 토큰은 저장 상태에 실리지 않는다",/token|github_pat|ghp_/i.test(JSON.stringify(getState())),false);
+    eq("GitHub 변경 비교는 저장 시각을 무시한다",ghComparable({a:1,savedAt:"x"}),ghComparable({a:1,savedAt:"y"}));
+    eq("CSP connect-src 는 api.github.com 한 곳뿐",
+       /connect-src https:\/\/api\.github\.com;/.test(document.querySelector('meta[http-equiv="Content-Security-Policy"]').content),true);
+  }
 
   /* ① 출고 관리기준 값 — 승인된 표준 공사기간표와 일치해야 한다 */
   const base=k=>STD_BASE.values[k]?.v;
